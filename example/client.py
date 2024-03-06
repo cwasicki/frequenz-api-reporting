@@ -24,14 +24,14 @@ def dt2ts(dt):
     ts.FromDatetime(dt)
     return ts
 
-
 class ReportingClient:
     def __init__(self, service_address):
         self._grpc_channel = grpcaio.insecure_channel(service_address)
         self._stub = reporting_pb2_grpc.ReportingStub(self._grpc_channel)
 
-    async def list_microgrid_components_data(
+    async def iter_microgrid_components_data_pages(
         self,
+        *,
         microgrid_components: list[tuple[int, list[int]]],
         metrics,
         start_dt,
@@ -59,45 +59,45 @@ class ReportingClient:
 
         page_token = None
 
-        for i in range(300):
+        while True:
             pagination_params = pagination_params_pb2.PaginationParams(
                 page_size=page_size,
                 page_token=page_token,
             )
 
-            response = await self._list_microgrid_components_data_page(
-                microgrid_components,
-                metrics,
-                list_filter,
-                pagination_params,
+            response = await self.fetch_page(
+                microgrid_components=microgrid_components,
+                metrics=metrics,
+                list_filter=list_filter,
+                pagination_params=pagination_params,
             )
 
+            if not response:
+                break
+
+            yield response
+
             page_token = response.pagination_info.next_page_token
-            yield self._parse_response(response)
-            print("Next page token:", page_token)
             if not page_token:
                 break
 
-    async def _list_microgrid_components_data_page(
-        self,
-        microgrid_components,
-        metrics,
-        list_filter,
-        pagination_params,
-    ):
-        response = await self._stub.ListMicrogridComponentsData(
-            reporting_pb2.ListMicrogridComponentsDataRequest(
-                microgrid_components=microgrid_components,
-                metrics=metrics,
-                filter=list_filter,
-                pagination_params=pagination_params,
+    async def fetch_page(self, microgrid_components, metrics, list_filter, pagination_params):
+        try:
+            response = await self._stub.ListMicrogridComponentsData(
+                reporting_pb2.ListMicrogridComponentsDataRequest(
+                    microgrid_components=microgrid_components,
+                    metrics=metrics,
+                    filter=list_filter,
+                    pagination_params=pagination_params,
+                )
             )
-        )
-
+        except grpcaio.AioRpcError as e:
+            print(f"RPC failed: {e}")
+            return None
         return response
 
     @staticmethod
-    def _parse_response(data):
+    def to_dict(data):
 
         ret = {}
         for mdata in data.microgrids:
@@ -118,23 +118,110 @@ class ReportingClient:
     async def close(self):
         await self._grpc_channel.close()
 
+async def component_data_dict(
+    client,
+    microgrid_id: int,
+    component_id: int,
+    metrics,
+    start_dt: datetime,
+    end_dt: datetime,
+    page_size: int,
+):
+    microgrid_components = [(microgrid_id, [component_id])]
+    ret = {}
+    async for response in client.iter_microgrid_components_data_pages(
+        microgrid_components=microgrid_components,
+        metrics=metrics,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        page_size=page_size,
+    ):
+        d = ReportingClient.to_dict(response)
+        ret = {**ret, **d[microgrid_id][component_id]}
+    return ret
+
+async def component_data_gen(
+    *,
+    client,
+    microgrid_id: int,
+    component_id: int,
+    metrics,
+    start_dt: datetime,
+    end_dt: datetime,
+    page_size: int,
+):
+    microgrid_components = [(microgrid_id, [component_id])]
+    async for response in client.iter_microgrid_components_data_pages(
+        microgrid_components=microgrid_components,
+        metrics=metrics,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        page_size=page_size,
+    ):
+        d = ReportingClient.to_dict(response)
+        d = d[microgrid_id][component_id]
+        for ts, mets in d.items():
+            vals = [mets.get(k) for k in metrics]
+            yield ts, *vals
+
+async def component_data_df(*, metrics, **kwargs):
+    import pandas as pd
+    data = [cd async for cd in component_data_gen(metrics=metrics, **kwargs)]
+    columns = ["ts"] + metrics
+    return pd.DataFrame(data, columns=columns).set_index("ts")
 
 async def main():
 
     service_address = "localhost:50051"
     client = ReportingClient(service_address)
-    async for response in client.list_microgrid_components_data(
-            microgrid_components=[
-                (10, [61]),
-            ],
-            metrics=[
-                metric_sample_pb2.Metric.METRIC_DC_POWER,
-                metric_sample_pb2.Metric.METRIC_DC_CURRENT,
-            ],
-            start_dt=datetime.fromisoformat("2023-11-21T12:00:00.00+00:00"),
-            end_dt=datetime.fromisoformat("2023-11-21T12:30:00.00+00:00"),
-            page_size=10,
-        ):
-        pprint(response)
+    print("########################################################")
+    print("Fetching dict")
+    dct = await component_data_dict(
+        client,
+        microgrid_id=10,
+        component_id=61,
+        metrics=[
+            metric_sample_pb2.Metric.METRIC_DC_POWER,
+            metric_sample_pb2.Metric.METRIC_DC_CURRENT,
+        ],
+        start_dt=datetime.fromisoformat("2023-11-21T12:00:00.00+00:00"),
+        end_dt=datetime.fromisoformat("2023-11-21T12:30:00.00+00:00"),
+        page_size=10,
+    )
+    pprint(dct)
+
+    print("########################################################")
+    print("Fetching generator")
+    async for samples in component_data_gen(
+        client=client,
+        microgrid_id=10,
+        component_id=61,
+        metrics=[
+            metric_sample_pb2.Metric.METRIC_DC_POWER,
+            metric_sample_pb2.Metric.METRIC_DC_CURRENT,
+        ],
+        start_dt=datetime.fromisoformat("2023-11-21T12:00:00.00+00:00"),
+        end_dt=datetime.fromisoformat("2023-11-21T12:30:00.00+00:00"),
+        page_size=10,
+    ):
+        print("Received:", samples)
+
+    print("########################################################")
+    print("Fetching df")
+    df = await component_data_df(
+        client=client,
+        microgrid_id=10,
+        component_id=61,
+        metrics=[
+            metric_sample_pb2.Metric.METRIC_DC_POWER,
+            metric_sample_pb2.Metric.METRIC_DC_CURRENT,
+        ],
+        start_dt=datetime.fromisoformat("2023-11-21T12:00:00.00+00:00"),
+        end_dt=datetime.fromisoformat("2023-11-21T12:30:00.00+00:00"),
+        page_size=10,
+    )
+    pprint(df)
+
+
 
 asyncio.run(main())
