@@ -1,5 +1,6 @@
 import asyncio
 import grpc.aio as grpcaio
+from dataclasses import dataclass
 
 from frequenz.api.reporting.v1 import (
     reporting_pb2_grpc,
@@ -19,10 +20,35 @@ from datetime import datetime
 
 from pprint import pprint
 
-def dt2ts(dt):
-    ts = Timestamp()
-    ts.FromDatetime(dt)
-    return ts
+
+@dataclass(frozen=True)
+class MicrogridComponentsDataPage:
+
+    _data_pb: reporting_pb2.ListMicrogridComponentsDataResponse
+
+    def to_dict_simple(self):
+
+        data = self._data_pb
+
+        ret = {}
+        for mdata in data.microgrids:
+            mid = mdata.microgrid_id
+            ret[mid] = {}
+            for cdata in mdata.components:
+                cid = cdata.component_id
+                if cid not in ret[mid]:
+                    ret[mid][cid] = {}
+                for msample in cdata.metric_samples:
+                    ts = msample.sampled_at.ToDatetime()
+                    met = msample.metric
+                    if ts not in ret[mid][cid]:
+                        ret[mid][cid][ts] = {}
+                    ret[mid][cid][ts][met] = msample.sample.simple_metric.value
+        return ret
+
+    @property
+    def next_page_token(self):
+        return self._data_pb.pagination_info.next_page_token
 
 class ReportingClient:
     def __init__(self, service_address):
@@ -46,6 +72,10 @@ class ReportingClient:
             for mid, cids in microgrid_components
         ]
 
+        def dt2ts(dt):
+            ts = Timestamp()
+            ts.FromDatetime(dt)
+            return ts
         time_filter = reporting_pb2.TimeFilter(
             start=dt2ts(start_dt),
             end=dt2ts(end_dt),
@@ -77,7 +107,7 @@ class ReportingClient:
 
             yield response
 
-            page_token = response.pagination_info.next_page_token
+            page_token = response.next_page_token
             if not page_token:
                 break
 
@@ -94,26 +124,7 @@ class ReportingClient:
         except grpcaio.AioRpcError as e:
             print(f"RPC failed: {e}")
             return None
-        return response
-
-    @staticmethod
-    def to_dict(data):
-
-        ret = {}
-        for mdata in data.microgrids:
-            mid = mdata.microgrid_id
-            ret[mid] = {}
-            for cdata in mdata.components:
-                cid = cdata.component_id
-                if cid not in ret[mid]:
-                    ret[mid][cid] = {}
-                for msample in cdata.metric_samples:
-                    ts = msample.sampled_at.ToDatetime()
-                    met = msample.metric
-                    if ts not in ret[mid][cid]:
-                        ret[mid][cid][ts] = {}
-                    ret[mid][cid][ts][met] = msample.sample.simple_metric.value
-        return ret
+        return MicrogridComponentsDataPage(response)
 
     async def close(self):
         await self._grpc_channel.close()
@@ -136,7 +147,7 @@ async def component_data_dict(
         end_dt=end_dt,
         page_size=page_size,
     ):
-        d = ReportingClient.to_dict(response)
+        d = response.to_dict_simple()
         ret = {**ret, **d[microgrid_id][component_id]}
     return ret
 
@@ -158,7 +169,7 @@ async def component_data_gen(
         end_dt=end_dt,
         page_size=page_size,
     ):
-        d = ReportingClient.to_dict(response)
+        d = response.to_dict_simple()
         d = d[microgrid_id][component_id]
         for ts, mets in d.items():
             vals = [mets.get(k) for k in metrics]
