@@ -22,52 +22,6 @@ from pprint import pprint
 
 from frequenz.client.reporting import ReportingClient
 
-async def component_data_dict(
-    client,
-    microgrid_id: int,
-    component_id: int,
-    metrics,
-    start_dt: datetime,
-    end_dt: datetime,
-    page_size: int,
-):
-    microgrid_components = [(microgrid_id, [component_id])]
-    ret = {}
-    async for response in client.iter_microgrid_components_data_pages(
-        microgrid_components=microgrid_components,
-        metrics=metrics,
-        start_dt=start_dt,
-        end_dt=end_dt,
-        page_size=page_size,
-    ):
-        d = response.to_dict_simple()
-        ret = {**ret, **d[microgrid_id][component_id]}
-    return ret
-
-async def component_data_gen(
-    *,
-    client,
-    microgrid_id: int,
-    component_id: int,
-    metrics,
-    start_dt: datetime,
-    end_dt: datetime,
-    page_size: int,
-):
-    microgrid_components = [(microgrid_id, [component_id])]
-    async for response in client.iter_microgrid_components_data_pages(
-        microgrid_components=microgrid_components,
-        metrics=metrics,
-        start_dt=start_dt,
-        end_dt=end_dt,
-        page_size=page_size,
-    ):
-        d = response.to_dict_simple()
-        d = d[microgrid_id][component_id]
-        for ts, mets in d.items():
-            vals = [mets.get(k) for k in metrics]
-            yield ts, *vals
-
 async def component_data_df(*, metrics, **kwargs):
     import pandas as pd
     data = [cd async for cd in component_data_gen(metrics=metrics, **kwargs)]
@@ -78,54 +32,52 @@ async def main():
 
     service_address = "localhost:50051"
     client = ReportingClient(service_address)
+
+    # Request parameters
+    MICROGRID_ID = 10
+    COMPONENT_ID = 61
+    microgrid_components = [(MICROGRID_ID, [COMPONENT_ID])]
+    metrics = [
+        metric_sample_pb2.Metric.METRIC_DC_POWER,
+        metric_sample_pb2.Metric.METRIC_DC_CURRENT,
+    ]
+    start_dt = datetime.fromisoformat("2023-11-21T12:00:00.00+00:00")
+    end_dt = datetime.fromisoformat("2023-11-21T12:30:00.00+00:00")
+    page_size = 10
+
+
     print("########################################################")
-    print("Fetching dict")
-    dct = await component_data_dict(
-        client,
-        microgrid_id=10,
-        component_id=61,
-        metrics=[
-            metric_sample_pb2.Metric.METRIC_DC_POWER,
-            metric_sample_pb2.Metric.METRIC_DC_CURRENT,
-        ],
-        start_dt=datetime.fromisoformat("2023-11-21T12:00:00.00+00:00"),
-        end_dt=datetime.fromisoformat("2023-11-21T12:30:00.00+00:00"),
-        page_size=10,
+    print("Dumping all data as a single dict")
+    dct = await client.components_data_dict(
+        microgrid_components=microgrid_components,
+        metrics=metrics,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        page_size=page_size,
     )
     pprint(dct)
 
-    print("########################################################")
-    print("Fetching generator")
-    async for samples in component_data_gen(
-        client=client,
-        microgrid_id=10,
-        component_id=61,
-        metrics=[
-            metric_sample_pb2.Metric.METRIC_DC_POWER,
-            metric_sample_pb2.Metric.METRIC_DC_CURRENT,
-        ],
-        start_dt=datetime.fromisoformat("2023-11-21T12:00:00.00+00:00"),
-        end_dt=datetime.fromisoformat("2023-11-21T12:30:00.00+00:00"),
-        page_size=10,
-    ):
-        print("Received:", samples)
 
     print("########################################################")
-    print("Fetching df")
-    df = await component_data_df(
-        client=client,
-        microgrid_id=10,
-        component_id=61,
-        metrics=[
-            metric_sample_pb2.Metric.METRIC_DC_POWER,
-            metric_sample_pb2.Metric.METRIC_DC_CURRENT,
-        ],
-        start_dt=datetime.fromisoformat("2023-11-21T12:00:00.00+00:00"),
-        end_dt=datetime.fromisoformat("2023-11-21T12:30:00.00+00:00"),
-        page_size=10,
+    print("Iterate over generator")
+    gen = lambda: client.components_data_iter(
+        microgrid_components=microgrid_components,
+        metrics=metrics,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        page_size=page_size,
     )
+    async for sample in gen():
+        print("Received:", sample)
+
+
+    print("########################################################")
+    print("Turn data into a pandas DataFrame")
+    import pandas as pd
+    data = [cd async for cd in gen()]
+    columns = ["ts", "mid", "cid", "metric", "value"]
+    df = pd.DataFrame(data, columns=columns).set_index("ts")
+
     pprint(df)
-
-
 
 asyncio.run(main())
