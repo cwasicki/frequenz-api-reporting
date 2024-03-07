@@ -1,7 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime
-from pprint import pprint
+from typing import AsyncIterator, List, Tuple
 
 import grpc.aio as grpcaio
 from frequenz.api.common.v1.metrics import metric_sample_pb2
@@ -10,9 +10,6 @@ from frequenz.api.common.v1.pagination import pagination_params_pb2
 from frequenz.api.reporting.v1 import reporting_pb2, reporting_pb2_grpc
 from google.protobuf.timestamp_pb2 import Timestamp
 
-from typing import Self
-
-###############################################################################
 # To be replaced with:
 # https://github.com/frequenz-floss/frequenz-client-common-python/pull/21
 from enum import Enum
@@ -25,24 +22,19 @@ class Metric(Enum):
     DC_CURRENT = PBMetric.METRIC_DC_CURRENT
     DC_POWER = PBMetric.METRIC_DC_POWER
     @classmethod
-    def from_proto(cls, metric: PBMetric.ValueType) -> Self:
+    def from_proto(cls, metric: PBMetric.ValueType) -> 'Metric':
         if not any(m.value == metric for m in cls):
             return Metric.UNSPECIFIED
         return cls(metric)
     def to_proto(self) -> PBMetric.ValueType:
         return self.value
-###############################################################################
-
 
 @dataclass(frozen=True)
-class MicrogridComponentsDataPage:
-
+class ComponentsDataPage:
     _data_pb: reporting_pb2.ListMicrogridComponentsDataResponse
 
-    def to_dict_simple(self):
-
+    def to_dict_simple(self) -> dict:
         data = self._data_pb
-
         ret = {}
         for mdata in data.microgrids:
             mid = mdata.microgrid_id
@@ -53,23 +45,59 @@ class MicrogridComponentsDataPage:
                     ret[mid][cid] = {}
                 for msample in cdata.metric_samples:
                     ts = msample.sampled_at.ToDatetime()
-                    met = msample.metric
+                    met = Metric.from_proto(msample.metric).name
                     if ts not in ret[mid][cid]:
                         ret[mid][cid][ts] = {}
                     ret[mid][cid][ts][met] = msample.sample.simple_metric.value
         return ret
 
+    def iterate_flat(self) -> dict:
+        data = self._data_pb
+        for mdata in data.microgrids:
+            mid = mdata.microgrid_id
+            for cdata in mdata.components:
+                cid = cdata.component_id
+                for msample in cdata.metric_samples:
+                    ts = msample.sampled_at.ToDatetime()
+                    met = Metric.from_proto(msample.metric).name
+                    yield (ts, mid, cid, met, msample.sample.simple_metric.value)
+
     @property
-    def next_page_token(self):
+    def next_page_token(self) -> str:
         return self._data_pb.pagination_info.next_page_token
 
-
 class ReportingClient:
-    def __init__(self, service_address):
+    def __init__(self, service_address: str):
         self._grpc_channel = grpcaio.insecure_channel(service_address)
         self._stub = reporting_pb2_grpc.ReportingStub(self._grpc_channel)
 
-    async def iter_microgrid_components_data_pages(
+    async def __aenter__(self) -> 'ReportingClient':
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.close()
+
+    async def components_data_iter(self, *args, **kwargs):
+        async for page in self._iterate_components_data_pages(*args, **kwargs):
+            for entry in page.iterate_flat():
+                yield entry
+
+    async def components_data_dict(self, *args, **kwargs):
+        def merge_dicts(d1, d2):
+            """Recursively merge two dictionaries."""
+            for k, v in d2.items():
+                if k in d1 and isinstance(d1[k], dict) and isinstance(v, dict):
+                    merge_dicts(d1[k], v)
+                else:
+                    d1[k] = v
+
+        ret = {}
+        async for response in self._iterate_components_data_pages(*args, **kwargs):
+            d = response.to_dict_simple()
+            merge_dicts(ret, d)
+        return ret
+
+    async def _iterate_components_data_pages(
         self,
         *,
         microgrid_components: list[tuple[int, list[int]]],
@@ -77,12 +105,9 @@ class ReportingClient:
         start_dt: datetime,
         end_dt: datetime,
         page_size: int = 1000,
-    ):
-        microgrid_components = [
-            microgrid_pb2.MicrogridComponentIDs(
-                microgrid_id=mid,
-                component_ids=cids,
-            )
+    ) -> AsyncIterator[ComponentsDataPage]:
+        microgrid_components_pb = [
+            microgrid_pb2.MicrogridComponentIDs(microgrid_id=mid, component_ids=cids)
             for mid, cids in microgrid_components
         ]
 
@@ -97,21 +122,18 @@ class ReportingClient:
         )
 
         list_filter = reporting_pb2.ListMicrogridComponentsDataRequest.ListFilter(
-            resampling_options=None,
             time_filter=time_filter,
-            include_options=None,
         )
 
         page_token = None
 
         while True:
             pagination_params = pagination_params_pb2.PaginationParams(
-                page_size=page_size,
-                page_token=page_token,
+                page_size=page_size, page_token=page_token
             )
 
             response = await self.fetch_page(
-                microgrid_components=microgrid_components,
+                microgrid_components=microgrid_components_pb,
                 metrics=metrics,
                 list_filter=list_filter,
                 pagination_params=pagination_params,
@@ -128,7 +150,7 @@ class ReportingClient:
 
     async def fetch_page(
         self, microgrid_components, metrics, list_filter, pagination_params
-    ):
+    ) -> ComponentsDataPage:
         try:
             response = await self._stub.ListMicrogridComponentsData(
                 reporting_pb2.ListMicrogridComponentsDataRequest(
@@ -141,7 +163,7 @@ class ReportingClient:
         except grpcaio.AioRpcError as e:
             print(f"RPC failed: {e}")
             return None
-        return MicrogridComponentsDataPage(response)
+        return ComponentsDataPage(response)
 
     async def close(self):
         await self._grpc_channel.close()
