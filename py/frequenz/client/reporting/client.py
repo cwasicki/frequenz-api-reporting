@@ -33,24 +33,6 @@ class Metric(Enum):
 class ComponentsDataPage:
     _data_pb: reporting_pb2.ListMicrogridComponentsDataResponse
 
-    def to_dict_simple(self) -> dict:
-        data = self._data_pb
-        ret = {}
-        for mdata in data.microgrids:
-            mid = mdata.microgrid_id
-            ret[mid] = {}
-            for cdata in mdata.components:
-                cid = cdata.component_id
-                if cid not in ret[mid]:
-                    ret[mid][cid] = {}
-                for msample in cdata.metric_samples:
-                    ts = msample.sampled_at.ToDatetime()
-                    met = Metric.from_proto(msample.metric).name
-                    if ts not in ret[mid][cid]:
-                        ret[mid][cid][ts] = {}
-                    ret[mid][cid][ts][met] = msample.sample.simple_metric.value
-        return ret
-
     def iterate_flat(self) -> dict:
         data = self._data_pb
         for mdata in data.microgrids:
@@ -83,18 +65,18 @@ class ReportingClient:
                 yield entry
 
     async def components_data_dict(self, *args, **kwargs):
-        def merge_dicts(d1, d2):
-            """Recursively merge two dictionaries."""
-            for k, v in d2.items():
-                if k in d1 and isinstance(d1[k], dict) and isinstance(v, dict):
-                    merge_dicts(d1[k], v)
-                else:
-                    d1[k] = v
-
         ret = {}
-        async for response in self._iterate_components_data_pages(*args, **kwargs):
-            d = response.to_dict_simple()
-            merge_dicts(ret, d)
+
+        async for ts, mid, cid, met, value in self.components_data_iter(*args, **kwargs):
+            if mid not in ret:
+                ret[mid] = {}
+            if cid not in ret[mid]:
+                ret[mid][cid] = {}
+            if ts not in ret[mid][cid]:
+                ret[mid][cid][ts] = {}
+
+            ret[mid][cid][ts][met] = value
+
         return ret
 
     async def _iterate_components_data_pages(
