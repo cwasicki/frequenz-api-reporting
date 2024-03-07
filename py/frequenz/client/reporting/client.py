@@ -10,6 +10,29 @@ from frequenz.api.common.v1.pagination import pagination_params_pb2
 from frequenz.api.reporting.v1 import reporting_pb2, reporting_pb2_grpc
 from google.protobuf.timestamp_pb2 import Timestamp
 
+from typing import Self
+
+###############################################################################
+# To be replaced with:
+# https://github.com/frequenz-floss/frequenz-client-common-python/pull/21
+from enum import Enum
+# pylint: disable=no-name-in-module
+from frequenz.api.common.v1.metrics.metric_sample_pb2 import Metric as PBMetric
+# pylint: enable=no-name-in-module
+class Metric(Enum):
+    UNSPECIFIED = PBMetric.METRIC_UNSPECIFIED
+    DC_VOLTAGE = PBMetric.METRIC_DC_VOLTAGE
+    DC_CURRENT = PBMetric.METRIC_DC_CURRENT
+    DC_POWER = PBMetric.METRIC_DC_POWER
+    @classmethod
+    def from_proto(cls, metric: PBMetric.ValueType) -> Self:
+        if not any(m.value == metric for m in cls):
+            return Metric.UNSPECIFIED
+        return cls(metric)
+    def to_proto(self) -> PBMetric.ValueType:
+        return self.value
+###############################################################################
+
 
 @dataclass(frozen=True)
 class MicrogridComponentsDataPage:
@@ -50,10 +73,10 @@ class ReportingClient:
         self,
         *,
         microgrid_components: list[tuple[int, list[int]]],
-        metrics,
-        start_dt,
-        end_dt,
-        page_size,
+        metrics: list[Metric],
+        start_dt: datetime,
+        end_dt: datetime,
+        page_size: int = 1000,
     ):
         microgrid_components = [
             microgrid_pb2.MicrogridComponentIDs(
