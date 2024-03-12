@@ -10,24 +10,7 @@ from frequenz.api.common.v1.pagination import pagination_params_pb2
 from frequenz.api.reporting.v1 import reporting_pb2, reporting_pb2_grpc
 from google.protobuf.timestamp_pb2 import Timestamp
 
-# To be replaced with:
-# https://github.com/frequenz-floss/frequenz-client-common-python/pull/21
-from enum import Enum
-# pylint: disable=no-name-in-module
-from frequenz.api.common.v1.metrics.metric_sample_pb2 import Metric as PBMetric
-# pylint: enable=no-name-in-module
-class Metric(Enum):
-    UNSPECIFIED = PBMetric.METRIC_UNSPECIFIED
-    DC_VOLTAGE = PBMetric.METRIC_DC_VOLTAGE
-    DC_CURRENT = PBMetric.METRIC_DC_CURRENT
-    DC_POWER = PBMetric.METRIC_DC_POWER
-    @classmethod
-    def from_proto(cls, metric: PBMetric.ValueType) -> 'Metric':
-        if not any(m.value == metric for m in cls):
-            return Metric.UNSPECIFIED
-        return cls(metric)
-    def to_proto(self) -> PBMetric.ValueType:
-        return self.value
+from frequenz.client.common.metric import Metric
 
 @dataclass(frozen=True)
 class ComponentsDataPage:
