@@ -11,6 +11,8 @@ from frequenz.api.reporting.v1 import reporting_pb2, reporting_pb2_grpc
 from google.protobuf.timestamp_pb2 import Timestamp
 
 from frequenz.client.common.metric import Metric
+from collections import namedtuple
+SampleTuple = namedtuple('SampleTuple', ['timestamp', 'microgrid_id', 'component_id', 'metric', 'value'])
 
 @dataclass(frozen=True)
 class ComponentsDataPage:
@@ -34,7 +36,8 @@ class ComponentsDataPage:
                 for msample in cdata.metric_samples:
                     ts = msample.sampled_at.ToDatetime()
                     met = Metric.from_proto(msample.metric).name
-                    yield (ts, mid, cid, met, msample.sample.simple_metric.value)
+                    value = msample.sample.simple_metric.value
+                    yield SampleTuple(timestamp=ts, microgrid_id=mid, component_id=cid, metric=met, value=value)
 
     @property
     def next_page_token(self) -> str:
@@ -99,6 +102,8 @@ class ReportingClient:
             time_filter=time_filter,
         )
 
+        metrics_pb = [metric.to_proto() for metric in metrics]
+
         page_token = None
 
         while True:
@@ -108,7 +113,7 @@ class ReportingClient:
 
             response = await self.fetch_page(
                 microgrid_components=microgrid_components_pb,
-                metrics=metrics,
+                metrics=metrics_pb,
                 list_filter=list_filter,
                 pagination_params=pagination_params,
             )
