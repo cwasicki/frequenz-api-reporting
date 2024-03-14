@@ -15,6 +15,7 @@ from frequenz.api.common.v1.pagination import (
 )
 
 
+import argparse
 from google.protobuf.timestamp_pb2 import Timestamp
 from datetime import datetime
 
@@ -23,21 +24,12 @@ from pprint import pprint
 from frequenz.client.reporting import ReportingClient
 from frequenz.client.common.metric import Metric
 
-async def component_data_df(*, metrics, **kwargs):
-    import pandas as pd
-    data = [cd async for cd in component_data_gen(metrics=metrics, **kwargs)]
-    columns = ["ts"] + metrics
-    return pd.DataFrame(data, columns=columns).set_index("ts")
 
-async def main():
-
+async def main(microgrid_id, component_id):
     service_address = "localhost:50051"
     client = ReportingClient(service_address)
 
-    # Request parameters
-    MICROGRID_ID = 10
-    COMPONENT_ID = 61
-    microgrid_components = [(MICROGRID_ID, [COMPONENT_ID])]
+    microgrid_components = [(microgrid_id, [component_id])]
     metrics = [
         Metric.DC_POWER,
         Metric.DC_CURRENT,
@@ -82,4 +74,12 @@ async def main():
 
     pprint(df)
 
-asyncio.run(main())
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("microgrid_id", type=int, help="Microgrid ID")
+    parser.add_argument("component_id", type=int, help="Component ID")
+
+    args = parser.parse_args()
+    asyncio.run(main(args.microgrid_id, args.component_id))
