@@ -16,6 +16,15 @@ from frequenz.client.common.metric import Metric
 class ComponentsDataPage:
     _data_pb: reporting_pb2.ListMicrogridComponentsDataResponse
 
+    def is_empty(self) -> bool:
+        if not self._data_pb.microgrids:
+            return True
+        if not self._data_pb.microgrids[0].components:
+            return True
+        if not self._data_pb.microgrids[0].components[0].metric_samples:
+            return True
+        return False
+
     def iterate_flat(self) -> dict:
         data = self._data_pb
         for mdata in data.microgrids:
@@ -103,8 +112,7 @@ class ReportingClient:
                 list_filter=list_filter,
                 pagination_params=pagination_params,
             )
-
-            if not response:
+            if not response or response.is_empty():
                 break
 
             yield response
