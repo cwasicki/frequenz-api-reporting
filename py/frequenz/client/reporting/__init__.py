@@ -1,3 +1,3 @@
 from .client import ReportingClient
 
-__all__ = ['ReportingClient']
+__all__ = ["ReportingClient"]

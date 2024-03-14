@@ -26,7 +26,6 @@ from frequenz.client.reporting import ReportingClient
 from frequenz.client.common.metric import Metric
 
 
-
 async def components_data_dict(components_data_iter):
     ret = {}
 
@@ -95,7 +94,6 @@ async def main(microgrid_id, component_id):
     data = [cd async for cd in gen()]
     df = pd.DataFrame(data).set_index("timestamp")
     pprint(df)
-
 
 
 if __name__ == "__main__":

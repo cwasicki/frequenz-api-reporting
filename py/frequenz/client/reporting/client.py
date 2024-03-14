@@ -13,8 +13,11 @@ from google.protobuf.timestamp_pb2 import Timestamp
 from frequenz.client.common.metric import Metric
 from collections import namedtuple
 
-Sample = namedtuple('Sample', ['timestamp', 'value'])
-MetricSample = namedtuple('MetricSample', ['timestamp', 'microgrid_id', 'component_id', 'metric', 'value'])
+Sample = namedtuple("Sample", ["timestamp", "value"])
+MetricSample = namedtuple(
+    "MetricSample", ["timestamp", "microgrid_id", "component_id", "metric", "value"]
+)
+
 
 @dataclass(frozen=True)
 class ComponentsDataPage:
@@ -39,18 +42,25 @@ class ComponentsDataPage:
                     ts = msample.sampled_at.ToDatetime()
                     met = Metric.from_proto(msample.metric).name
                     value = msample.sample.simple_metric.value
-                    yield MetricSample(timestamp=ts, microgrid_id=mid, component_id=cid, metric=met, value=value)
+                    yield MetricSample(
+                        timestamp=ts,
+                        microgrid_id=mid,
+                        component_id=cid,
+                        metric=met,
+                        value=value,
+                    )
 
     @property
     def next_page_token(self) -> str:
         return self._data_pb.pagination_info.next_page_token
+
 
 class ReportingClient:
     def __init__(self, service_address: str):
         self._grpc_channel = grpcaio.insecure_channel(service_address)
         self._stub = reporting_pb2_grpc.ReportingStub(self._grpc_channel)
 
-    async def __aenter__(self) -> 'ReportingClient':
+    async def __aenter__(self) -> "ReportingClient":
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
@@ -61,7 +71,9 @@ class ReportingClient:
             for entry in page.iterate_flat():
                 yield entry
 
-    async def single_metric_iter(self, microgrid_id, component_id, metric, start_dt, end_dt, page_size=1000):
+    async def single_metric_iter(
+        self, microgrid_id, component_id, metric, start_dt, end_dt, page_size=1000
+    ):
         async for entry in self._components_data_iter(
             microgrid_components=[(microgrid_id, [component_id])],
             metrics=[metric],
