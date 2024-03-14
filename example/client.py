@@ -14,6 +14,7 @@ from frequenz.api.common.v1.pagination import (
     pagination_params_pb2,
 )
 
+import pandas as pd
 
 import argparse
 from google.protobuf.timestamp_pb2 import Timestamp
@@ -23,6 +24,23 @@ from pprint import pprint
 
 from frequenz.client.reporting import ReportingClient
 from frequenz.client.common.metric import Metric
+
+
+
+async def components_data_dict(components_data_iter):
+    ret = {}
+
+    async for ts, mid, cid, met, value in components_data_iter():
+        if mid not in ret:
+            ret[mid] = {}
+        if cid not in ret[mid]:
+            ret[mid][cid] = {}
+        if ts not in ret[mid][cid]:
+            ret[mid][cid][ts] = {}
+
+        ret[mid][cid][ts][met] = value
+
+    return ret
 
 
 async def main(microgrid_id, component_id):
@@ -40,34 +58,40 @@ async def main(microgrid_id, component_id):
 
     page_size = 10
 
-
     print("########################################################")
-    print("Iterate over generator")
-    gen = lambda: client.components_data_iter(
+    print("Iterate over single metric generator")
+
+    async for sample in client.single_metric_iter(
+        microgrid_id=microgrid_id,
+        component_id=component_id,
+        metric=metrics[0],
+        start_dt=start_dt,
+        end_dt=end_dt,
+        page_size=page_size,
+    ):
+        print("Received:", sample)
+
+    # Create a generator for multiple metrics (experimental)
+    gen = lambda: client._components_data_iter(
         microgrid_components=microgrid_components,
         metrics=metrics,
         start_dt=start_dt,
         end_dt=end_dt,
         page_size=page_size,
     )
+
+    print("########################################################")
+    print("Iterate over generator")
     async for sample in gen():
         print("Received:", sample)
 
     print("########################################################")
     print("Dumping all data as a single dict")
-    dct = await client.components_data_dict(
-        microgrid_components=microgrid_components,
-        metrics=metrics,
-        start_dt=start_dt,
-        end_dt=end_dt,
-        page_size=page_size,
-    )
+    dct = await components_data_dict(gen)
     pprint(dct)
-
 
     print("########################################################")
     print("Turn data into a pandas DataFrame")
-    import pandas as pd
     data = [cd async for cd in gen()]
     df = pd.DataFrame(data).set_index("timestamp")
     pprint(df)
