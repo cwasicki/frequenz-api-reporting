@@ -42,20 +42,8 @@ async def main():
         metric_sample_pb2.Metric.METRIC_DC_CURRENT,
     ]
     start_dt = datetime.fromisoformat("2023-11-21T12:00:00.00+00:00")
-    end_dt = datetime.fromisoformat("2023-11-21T12:30:00.00+00:00")
+    end_dt = datetime.fromisoformat("2023-11-21T12:01:00.00+00:00")
     page_size = 10
-
-
-    print("########################################################")
-    print("Dumping all data as a single dict")
-    dct = await client.components_data_dict(
-        microgrid_components=microgrid_components,
-        metrics=metrics,
-        start_dt=start_dt,
-        end_dt=end_dt,
-        page_size=page_size,
-    )
-    pprint(dct)
 
 
     print("########################################################")
@@ -69,6 +57,17 @@ async def main():
     )
     async for sample in gen():
         print("Received:", sample)
+
+    print("########################################################")
+    print("Dumping all data as a single dict")
+    dct = await client.components_data_dict(
+        microgrid_components=microgrid_components,
+        metrics=metrics,
+        start_dt=start_dt,
+        end_dt=end_dt,
+        page_size=page_size,
+    )
+    pprint(dct)
 
 
     print("########################################################")
