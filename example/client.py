@@ -69,9 +69,7 @@ async def main(microgrid_id, component_id):
     print("Turn data into a pandas DataFrame")
     import pandas as pd
     data = [cd async for cd in gen()]
-    columns = ["ts", "mid", "cid", "metric", "value"]
-    df = pd.DataFrame(data, columns=columns).set_index("ts")
-
+    df = pd.DataFrame(data).set_index("timestamp")
     pprint(df)
 
 
