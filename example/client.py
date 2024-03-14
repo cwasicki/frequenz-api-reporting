@@ -21,6 +21,7 @@ from datetime import datetime
 from pprint import pprint
 
 from frequenz.client.reporting import ReportingClient
+from frequenz.client.common.metric import Metric
 
 async def component_data_df(*, metrics, **kwargs):
     import pandas as pd
@@ -38,11 +39,13 @@ async def main():
     COMPONENT_ID = 61
     microgrid_components = [(MICROGRID_ID, [COMPONENT_ID])]
     metrics = [
-        metric_sample_pb2.Metric.METRIC_DC_POWER,
-        metric_sample_pb2.Metric.METRIC_DC_CURRENT,
+        Metric.DC_POWER,
+        Metric.DC_CURRENT,
     ]
+
     start_dt = datetime.fromisoformat("2023-11-21T12:00:00.00+00:00")
     end_dt = datetime.fromisoformat("2023-11-21T12:01:00.00+00:00")
+
     page_size = 10
 
 
