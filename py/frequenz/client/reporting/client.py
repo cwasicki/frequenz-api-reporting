@@ -12,7 +12,9 @@ from google.protobuf.timestamp_pb2 import Timestamp
 
 from frequenz.client.common.metric import Metric
 from collections import namedtuple
-SampleTuple = namedtuple('SampleTuple', ['timestamp', 'microgrid_id', 'component_id', 'metric', 'value'])
+
+Sample = namedtuple('Sample', ['timestamp', 'value'])
+MetricSample = namedtuple('MetricSample', ['timestamp', 'microgrid_id', 'component_id', 'metric', 'value'])
 
 @dataclass(frozen=True)
 class ComponentsDataPage:
@@ -37,7 +39,7 @@ class ComponentsDataPage:
                     ts = msample.sampled_at.ToDatetime()
                     met = Metric.from_proto(msample.metric).name
                     value = msample.sample.simple_metric.value
-                    yield SampleTuple(timestamp=ts, microgrid_id=mid, component_id=cid, metric=met, value=value)
+                    yield MetricSample(timestamp=ts, microgrid_id=mid, component_id=cid, metric=met, value=value)
 
     @property
     def next_page_token(self) -> str:
@@ -54,25 +56,20 @@ class ReportingClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.close()
 
-    async def components_data_iter(self, *args, **kwargs):
+    async def _components_data_iter(self, *args, **kwargs):
         async for page in self._iterate_components_data_pages(*args, **kwargs):
             for entry in page.iterate_flat():
                 yield entry
 
-    async def components_data_dict(self, *args, **kwargs):
-        ret = {}
-
-        async for ts, mid, cid, met, value in self.components_data_iter(*args, **kwargs):
-            if mid not in ret:
-                ret[mid] = {}
-            if cid not in ret[mid]:
-                ret[mid][cid] = {}
-            if ts not in ret[mid][cid]:
-                ret[mid][cid][ts] = {}
-
-            ret[mid][cid][ts][met] = value
-
-        return ret
+    async def single_metric_iter(self, microgrid_id, component_id, metric, start_dt, end_dt, page_size=1000):
+        async for entry in self._components_data_iter(
+            microgrid_components=[(microgrid_id, [component_id])],
+            metrics=[metric],
+            start_dt=start_dt,
+            end_dt=end_dt,
+            page_size=page_size,
+        ):
+            yield Sample(timestamp=entry.timestamp, value=entry.value)
 
     async def _iterate_components_data_pages(
         self,
