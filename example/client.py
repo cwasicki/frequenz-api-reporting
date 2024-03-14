@@ -1,29 +1,18 @@
-import asyncio
-import grpc.aio as grpcaio
-from dataclasses import dataclass
-
-from frequenz.api.reporting.v1 import (
-    reporting_pb2_grpc,
-    reporting_pb2,
-)
-
-from frequenz.api.common.v1.metrics import metric_sample_pb2
-from frequenz.api.common.v1.microgrid import microgrid_pb2
-
-from frequenz.api.common.v1.pagination import (
-    pagination_params_pb2,
-)
-
-import pandas as pd
-
 import argparse
-from google.protobuf.timestamp_pb2 import Timestamp
+import asyncio
+from dataclasses import dataclass
 from datetime import datetime
-
 from pprint import pprint
 
-from frequenz.client.reporting import ReportingClient
+import grpc.aio as grpcaio
+import pandas as pd
+from frequenz.api.common.v1.metrics import metric_sample_pb2
+from frequenz.api.common.v1.microgrid import microgrid_pb2
+from frequenz.api.common.v1.pagination import pagination_params_pb2
+from frequenz.api.reporting.v1 import reporting_pb2, reporting_pb2_grpc
 from frequenz.client.common.metric import Metric
+from frequenz.client.reporting import ReportingClient
+from google.protobuf.timestamp_pb2 import Timestamp
 
 
 async def components_data_dict(components_data_iter):

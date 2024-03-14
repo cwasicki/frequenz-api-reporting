@@ -1,4 +1,5 @@
 import asyncio
+from collections import namedtuple
 from dataclasses import dataclass
 from datetime import datetime
 from typing import AsyncIterator, List, Tuple
@@ -8,10 +9,8 @@ from frequenz.api.common.v1.metrics import metric_sample_pb2
 from frequenz.api.common.v1.microgrid import microgrid_pb2
 from frequenz.api.common.v1.pagination import pagination_params_pb2
 from frequenz.api.reporting.v1 import reporting_pb2, reporting_pb2_grpc
-from google.protobuf.timestamp_pb2 import Timestamp
-
 from frequenz.client.common.metric import Metric
-from collections import namedtuple
+from google.protobuf.timestamp_pb2 import Timestamp
 
 Sample = namedtuple("Sample", ["timestamp", "value"])
 MetricSample = namedtuple(
