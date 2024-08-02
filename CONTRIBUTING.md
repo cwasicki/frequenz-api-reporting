@@ -70,13 +70,15 @@ Here is an example of upgrading the `frequenz-api-common` dependency to version
 `v0.2.0`:
 ```sh
 ver="0.2.0"
+ver_minor=$(echo $ver | cut -d. -f1,2)
 
 cd submodules/frequenz-api-common
 git remote update
 git checkout v${ver}
 cd -
 
-sed s/"frequenz-api-common == [0-9]\.[0-9]\.[0-9]"/"frequenz-api-common == ${ver}"/g -i pyproject.toml
+sed 's/frequenz-api-common == [0-9]\.[0-9]\.[0-9]/frequenz-api-common == '"${ver}/" -i pyproject.toml
+sed 's|https://frequenz-floss.github.io/frequenz-api-common/v[0-9]\.[0-9]/objects.inv|https://frequenz-floss.github.io/frequenz-api-common/v'${ver_minor}'/objects.inv|' -i mkdocs.yml
 ```
 
 ### Running tests / checks individually
@@ -198,3 +200,30 @@ These are the steps to create a new release:
    eventually too).
 
 7. Celebrate!
+
+##  Cross-Arch Testing
+
+This project has built-in support for testing across multiple architectures.
+Currently, our CI conducts tests on `arm64` machines using QEMU emulation. We
+also have the flexibility to expand this support to include additional
+architectures in the future.
+
+This project contains Dockerfiles that can be used in the CI to test the
+python package in non-native machine architectures, e.g., `arm64`. The
+Dockerfiles exist in the directory `.github/containers/nox-cross-arch`, and
+follow a naming scheme so that they can be easily used in build matrices in the
+CI, in `nox-cross-arch` job. The naming scheme is:
+
+```
+<arch>-<os>-python-<python-version>.Dockerfile
+```
+
+E.g.,
+
+```
+arm64-ubuntu-20.04-python-3.11.Dockerfile
+```
+
+If a Dockerfile for your desired target architecture, OS, and python version
+does not exist here, please add one before proceeding to add your options to
+the test matrix.
