@@ -29,15 +29,6 @@ import "frequenz/api/common/v1/pagination/pagination_params.proto";
 // imported above.
 //
 service Reporting {
-  // Fetches historical metrics for a list of microgrid components.
-  //
-  // !!! note
-  //     This RPC endpoint retrieves historical metrics data for components of one or more
-  //     microgrids. Clients need to provide at least one microgrid ID and one component ID
-  //     to get a result.
-  rpc ListMicrogridComponentsData(ListMicrogridComponentsDataRequest)
-    returns (ListMicrogridComponentsDataResponse) {}
-
   // Streams metrics for a list of microgrid components.
   //
   // !!! note
@@ -46,16 +37,6 @@ service Reporting {
   //     to get a result.
   rpc ReceiveMicrogridComponentsDataStream(ReceiveMicrogridComponentsDataStreamRequest)
     returns (stream ReceiveMicrogridComponentsDataStreamResponse) {}
-
-  // Fetches aggregated historical metrics based on user-defined formulas for a list of
-  // microgrid components.
-  //
-  // !!! note
-  //     This RPC endpoint retrieves aggregated historical metrics data based on user-defined
-  //     formulas for microgrid components. At least one formula must be provided for a valid query.
-  //     Formulas are provided on a per-microgrid basis.
-  rpc ListAggregatedMicrogridComponentsData(ListAggregatedMicrogridComponentsDataRequest)
-    returns (ListAggregatedMicrogridComponentsDataResponse) {}
 
   // Streams aggregated metrics based on user-defined formulas for a list of microgrid
   // components.
@@ -194,112 +175,6 @@ message MetricSourceOptions {
   repeated string metric_sources = 2;
 }
 
-// Message defining the request format for fetching historical metrics, such as electrical
-// measurements, and other information for individual microgrid components.
-//
-// !!! note
-//     In addition to the raw metrics, the API can also return additional information
-//     like errors or operational states of the components during the specified time period.
-//
-message ListMicrogridComponentsDataRequest {
-  // General filter criteria for querying microgrid components data.
-  message ListFilter {
-    // Optional resampling options like resolution for the data, represented in seconds.
-    // If omitted, data will be returned in its original representation.
-    ResamplingOptions resampling_options = 1;
-
-    // Optional time-based filter criteria.
-    TimeFilter time_filter = 2;
-
-    // Include options specifying additional fields to be included in the response.
-    IncludeOptions include_options = 3;
-  }
-
-  // Encapsulates the microgrid ID and the component IDs within that microgrid for which
-  // the historical data should be retrieved.
-  //
-  // !!! note
-  //     Each entry in this repeated field associates a microgrid ID with its respective
-  //     component IDs. At least one such association must be provided for a valid request.
-  repeated frequenz.api.common.v1.microgrid.MicrogridComponentIDs microgrid_components = 1;
-
-  // List of metrics to return. Only the specified metrics will be returned.
-  //
-  // !!! note
-  //     At least one metric must be specified. Failure to do so will result in an empty response.
-  repeated frequenz.api.common.v1.metrics.Metric metrics = 2;
-
-  // General filter criteria apply to the data retrieval for all specified microgrid components.
-  //
-  // !!! note
-  //     The filter can specify a start time and end time, and/or resampling options.
-  //     It can also specify bounds, operational state, or errors to be returned.
-  ListFilter filter = 3;
-
-  // Pagination parameters to control the amount of data returned in a single response.
-  frequenz.api.common.v1.pagination.PaginationParams pagination_params = 4;
-}
-
-// Response containing historical microgrid component metrics in one or multiple microgrids
-//
-// Each microgrid's components are provided as timeseries data structures that encapsulate
-// metrics, bounds, errors and operational state and their associated timestamps for each component
-// within the specified time range.
-//
-// !!! example
-//     Example output structure:
-//     ```
-//     microgrids: [
-//       {
-//         microgrid_id: 1,
-//         components: [
-//           {
-//             component_id: 13,
-//             metric_samples: [
-//               /* list of metrics for multiple timestamps */
-//               { sampled_at: "2023-10-01T00:00:00Z", metric: "DC_VOLTAGE_V", sample: {...}, bounds: {...} },
-//               { sampled_at: "2023-10-01T00:00:00Z", metric: "DC_CURRENT_A", sample: {...}, bounds: {...} }
-//               { sampled_at: "2023-10-01T00:05:00Z", metric: "DC_VOLTAGE_V", sample: {...}, bounds: {...} },
-//               { sampled_at: "2023-10-01T00:05:00Z", metric: "DC_CURRENT_A", sample: {...}, bounds: {...} }
-//             ],
-//             states: [
-//               /* list of states for multiple timestamps */
-//               { sampled_at: "2023-10-01T00:00:13.12Z", states: [...], errors: [...], warnings: [...] },
-//               { sampled_at: "2023-10-01T00:02:22.01Z", states: [...], errors: [...], warnings: [...] },
-//               { sampled_at: "2023-10-01T00:05:02.32Z", states: [...], errors: [...], warnings: [...] },
-//             ]
-//           },
-//           {
-//             component_id: 243,
-//             metric_samples: [ ... ],
-//             states: [ ... ]
-//           },
-//         ]
-//       },
-//       {
-//         microgrid_id: 2,
-//         components: [ ... ]
-//       }
-//     ]
-//     ```
-//
-message ListMicrogridComponentsDataResponse {
-  // Contains the metric samples for a single microgrid organized by components.
-  message MicrogridData {
-    // Unique microgrid identifier.
-    uint64 microgrid_id = 1;
-
-    // A list of components with related metric timeseries data samples.
-    repeated frequenz.api.common.v1.microgrid.components.ComponentData components = 2;
-  }
-
-  // List of microgrids metrics timeseries data, organized per component.
-  repeated MicrogridData microgrids = 1;
-
-  // Metadata for pagination, including token for the next page to retrieve.
-  frequenz.api.common.v1.pagination.PaginationInfo pagination_info = 2;
-}
-
 // Request message for receiving stream of metrics, such as electrical
 // measurements, and other information for individual microgrid components.
 //
@@ -411,103 +286,6 @@ message ReceiveMicrogridComponentsDataStreamResponse {
 
   // List of components within this microgrid, each with its associated data samples.
   repeated frequenz.api.common.v1.microgrid.components.ComponentData components = 2;
-}
-
-// Message defining the request format for fetching aggregated historical metrics
-// for a list of microgrid components. This request allows to specify custom
-// aggregation formulas, along with general filtering and pagination options.
-//
-// !!! note
-//         The aggregation follows the passive sign convention. Bounds, operational
-//         state, or errors are not applicable to aggregated data.
-//
-message ListAggregatedMicrogridComponentsDataRequest {
-  // General filter criteria for querying aggregated microgrid components data.
-  message AggregationListFilter {
-    // Optional resampling options like resolution for the data, represented in seconds.
-    // Data will always be resampled to ensure consistency of the aggregation.
-    // If omitted, data will be resampled with a default of one second
-    ResamplingOptions resampling_options = 1;
-
-    // Optional time-based filter criteria.
-    TimeFilter time_filter = 2;
-  }
-
-  // List of aggregation formulas, composed of a metric and related formula.
-  //
-  // !!! note
-  //     Each entry in the list consists of a pairs a metric and aggregation formula. Multiple such
-  //     aggregations can be specified for a list of microgrid components, allowing for different
-  //     metrics and formula combinations. At least one formula must be provided for a valid
-  //     request.
-  repeated AggregationConfig aggregation_configs = 1;
-
-  // General filter that applies to all formula aggregations provided.
-  AggregationListFilter filter = 2;
-
-  // Pagination parameters to control the amount of data returned in a single response.
-  frequenz.api.common.v1.pagination.PaginationParams pagination_params = 3;
-}
-
-// Message defining the response format for a request that fetches aggregated historical
-// metrics based on custom aggregation formulas.
-//
-// !!! note
-//     At least one formula and metric must have been specified in the corresponding request.
-//     The aggregation results for these metrics are returned in the samples field.
-//
-// !!! example
-//     Example output structure is the following:
-//     ```
-//     results: [
-//       {
-//         aggregation_config: {
-//           microgrid_id: 1,
-//           metric: "DC_VOLTAGE_V",
-//           aggregation_formula: "avg(3,5,6)"
-//         },
-//         samples: [
-//           { sampled_at: "2023-10-01T00:00:00Z", sample: { value: 220.1 } },
-//           { sampled_at: "2023-10-01T00:05:00Z", sample: { value: 215.2 } }
-//         ]
-//       },
-//       {
-//         aggregation_config: {
-//           microgrid_id: 2,
-//           metric: "DC_CURRENT_A",
-//           aggregation_formula: "sum(1,2,3,4)"
-//         },
-//         samples: [
-//           { sampled_at: "2023-10-01T00:00:00Z", sample: { value: 1310.7 } },
-//           { sampled_at: "2023-10-01T00:05:00Z", sample: { value: 1422.2 } }
-//         ]
-//       }
-//     ]
-//     ```
-//
-message ListAggregatedMicrogridComponentsDataResponse {
-  // Encapsulates the result of aggregating a metric.
-  message AggregatedResult {
-    // Metric and related formula provided for aggregation.
-    AggregationConfig aggregation_config = 1;
-
-    // A list of aggregated metrics.
-    repeated SimpleAggregatedMetricValue samples = 2;
-  }
-
-  // List of aggregated results, each corresponding to a metric and custom aggregation
-  // formula.
-  //
-  // !!! note
-  //     Each entry in this list contains the aggregation formula config and the
-  //     corresponding aggregated metric samples for the requested timeframe.
-  repeated AggregatedResult results = 1;
-
-  // Metadata for pagination, containing the token for the next page of results.
-  //
-  // !!! note
-  //     If `pagination_info` is populated, it implies that more data is available to fetch.
-  frequenz.api.common.v1.pagination.PaginationInfo pagination_info = 2;
 }
 
 // Message defining the request format for streaming aggregated historical metrics.
