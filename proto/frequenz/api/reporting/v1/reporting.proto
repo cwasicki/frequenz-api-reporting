@@ -208,6 +208,11 @@ message MetricConnections {
   //     The connections identifiers must match exactly those used in the `MetricSample` messages.
   //     Ensure that the connections specified here are valid for the given metric and component.
   //
+  // !!! important
+  //     There is an important distinction between these connection strings, and the `ComponentConnection`
+  //     message in the common API. A connection string here may, unlike the `ComponentConnection` message,
+  //     refer to a connection that is not present in the microgrid's component graph.
+  //
   // !!! example
   //     For a metric that can come from multiple DC strings in a PV array, you might specify:
   //
