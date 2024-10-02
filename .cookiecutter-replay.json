@@ -15,17 +15,16 @@
     "github_repo_name": "frequenz-api-reporting",
     "default_codeowners": "(like @some-org/some-team; defaults to a team based on the repo type)",
     "_template": "gh:frequenz-floss/frequenz-repo-config-python",
-    "_repo_dir": "/home/stefan/.cookiecutters/frequenz-repo-config-python/cookiecutter",
     "_checkout": "v0.7.5"
   },
   "_cookiecutter": {
     "Introduction": "{{cookiecutter | introduction}}",
     "type": [
+      "model",
       "actor",
       "api",
       "app",
-      "lib",
-      "model"
+      "lib"
     ],
     "name": null,
     "description": null,
