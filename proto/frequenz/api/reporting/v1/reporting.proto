@@ -244,14 +244,6 @@ message ReceiveMicrogridComponentsDataStreamRequest {
     // Optional time-based filter criteria.
     // If omitted, data will start streaming from the timestamp that the request was received.
     TimeFilter time_filter = 3;
-
-    // List of metric source filters
-    // For the metrics present in this list, the data from only the specified
-    // sources will be returned. If no sources are provided for a metric in this
-    // list, then no data will be returned for the said metric.
-    // For the metrics not present in this list, data from all of their sources will
-    // be returned.
-    repeated MetricConnections metric_sources = 4;
   }
 
   // Encapsulates the microgrid ID and the component IDs within that microgrid for which
@@ -262,11 +254,31 @@ message ReceiveMicrogridComponentsDataStreamRequest {
   //     component IDs. At least one such association must be provided for a valid request.
   repeated frequenz.api.common.v1.microgrid.MicrogridComponentIDs microgrid_components = 1;
 
-  // List of metrics to return. Only the specified metrics will be returned.
+  // List of metrics to receive data for, each possibly with connection filters.
   //
   // !!! note
-  //     At least one metric must be specified. Failure to do so will result in an empty response.
-  repeated frequenz.api.common.v1.metrics.Metric metrics = 2;
+  //     At least one metric must be specified. Each metric can have an optional list of connections.
+  //     If connections are provided for a metric, only data from those connections will be returned.
+  //     If no connections are provided for a metric, data from all connections will be returned for that metric.
+  //
+  // !!! example
+  //     To receive `VOLTAGE` data only from the battery connection and `CURRENT` data from all connections:
+  //
+  //     ```
+  //     {
+  //       "metrics": [
+  //         {
+  //           "metric": "VOLTAGE",
+  //           "connections": ["dc_battery_1"]
+  //         },
+  //         {
+  //           "metric": "CURRENT"
+  //           // No connections specified; data from all connections will be returned for CURRENT
+  //         }
+  //       ]
+  //     }
+  //     ```
+  repeated MetricConnections metrics = 2;
 
   // General filter that applies to the data retrieval for all specified microgrids and components.
   //
