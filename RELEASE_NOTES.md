@@ -2,17 +2,17 @@
 
 ## Summary
 
-- Metric source options
+- `List*` endpoints have been removed.
+- `MetricSourceOptions` have been renamed to `MetricConnections`, and moved out of the filter message.
 
 ## Upgrading
 
-<!-- Here goes notes on how to upgrade from previous versions, including deprecations and what they should be replaced with -->
+- Servers should remove the list endpoint implementations, clients should use the streaming endpoints.
+- Metric source info can be found directly on the request, instead of in the filter object.
 
 ## New Features
 
-- A new field, `MetricSourceOptions` has been added to the `StreamFilter` message, allowing users to give specific sources for a given metric.
-  Multiples of the same metric can exist, in which case they are "tagged" with the source they come from. The metric source options allows
-  the user to specify one or multiple tags.
+<!-- Here goes the main new features and examples or instructions on how to use them -->
 
 ## Bug Fixes
 
