@@ -163,16 +163,61 @@ message SimpleAggregatedMetricValue {
   frequenz.api.common.v1.metrics.SimpleMetricValue sample = 2;
 }
 
-// Filter for sources for metrics, specified for a single metric at a time.
-// Specifying a metric here will only stream data for that metric where data
-// can be found tagged with the given source names.
-message MetricSourceOptions {
-  // The metric for which sources will be filtered.
+// Message defining a metric to receive data for, optionally filtering by connections.
+//
+// This message allows clients to request data for a specific metric, and optionally
+// filter the data by connection identifiers. This is particularly useful when a metric can
+// originate from multiple connections within a component, such as different DC strings for
+// batteries or PV arrays connected to a hybrid inverter.
+//
+// !!! note
+//     The `MetricConnections` message enables fine-grained control over which are included in the data stream.
+//     If multiple `MetricConnections` messages are specified for different metrics, the filters apply
+//     separately to each metric.
+//     The `connections` specified here correspond to the `connections` field in the `MetricSample` message
+//     defined in the common API. By filtering on `connections`, you effectively select which `MetricSample`
+//     messages to receive based on their `connections` value.
+//
+// !!! example
+//     Suppose you have a hybrid inverter that provides the `VOLTAGE` metric from both its battery and
+//     PV array. If you're only interested in the voltage measurements from the battery, you can use
+//     `Metrics` message to specify the `VOLTAGE` metric and set `connections` to `["dc_battery_1"]`
+//     for the DC string connected to a battery.
+//
+//     ```json
+//     {
+//       "metric": "VOLTAGE",
+//       "connections": ["dc_battery_1"]
+//     }
+//     ```
+//
+message MetricConnections {
+  // The metric for which data is requested.
+  //
+  // If `connections` are specified, only data for this metric from those connections will be returned.
+  // If no `connections` are specified, data from all connections for this metric will be returned.
   frequenz.api.common.v1.metrics.Metric metric = 1;
 
-  // A list of sources to allow for the specified metric.
-  // If this list is empty, then no data for this metric is streamed.
-  repeated string metric_sources = 2;
+  // An optional list of connections to filter the data for the specified metric.
+  //
+  // Each connection corresponds to the `connections` field in `MetricSample` messages
+  // (see the common API definition).
+  // If this list is empty or not specified, data from all sources for this metric will be returned.
+  //
+  // !!! important
+  //     The connections identifiers must match exactly those used in the `MetricSample` messages.
+  //     Ensure that the connections specified here are valid for the given metric and component.
+  //
+  // !!! example
+  //     For a metric that can come from multiple DC strings in a PV array, you might specify:
+  //
+  //     ```json
+  //     {
+  //       "connections": ["dc_string_1", "dc_string_2"]
+  //     }
+  //     ```
+  //
+  repeated string connections = 2;
 }
 
 // Request message for receiving stream of metrics, such as electrical
@@ -206,7 +251,7 @@ message ReceiveMicrogridComponentsDataStreamRequest {
     // list, then no data will be returned for the said metric.
     // For the metrics not present in this list, data from all of their sources will
     // be returned.
-    repeated MetricSourceOptions metric_sources = 4;
+    repeated MetricConnections metric_sources = 4;
   }
 
   // Encapsulates the microgrid ID and the component IDs within that microgrid for which
